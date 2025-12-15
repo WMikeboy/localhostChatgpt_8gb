@@ -111,3 +111,17 @@ Ollama 回答變成英文或胡言亂語
 ComfyUI Manager 無法安裝節點 (Security Error)
 
 解法: 因開啟 --listen 導致，需暫時關閉監聽或調整 Manager 設定檔的安全層級。
+
+
+<h1>手動安裝 ComfyUI-GGUF 步驟：
+
+進入節點資料夾： 進入 ComfyUI_windows_portable\ComfyUI\custom_nodes\。
+
+開啟 CMD： 在網址列輸入 cmd 並按 Enter。
+
+輸入下載指令： 複製貼上以下指令並執行：
+
+Bash
+
+git clone https://github.com/city96/ComfyUI-GGUF.git
+等待完成： 當你看到資料夾裡多了一個 ComfyUI-GGUF 資料夾，就代表安裝成功了！</h1>
