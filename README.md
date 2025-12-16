@@ -117,3 +117,6 @@ ComfyUI-GGUF 節點顯示紅色
 1. 確認已安裝 ComfyUI-GGUF。
 2. 確認 Python 依賴庫已修復。
 
+ollama：11434
+ComfyUI：8188
+Backend：8080
