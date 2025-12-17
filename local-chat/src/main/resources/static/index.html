@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Chat</title>
+    <script src="tailwind.js"></script>
+    <script src="vue.js"></script>
+    <script src="marked.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 750: '#2d2d3f', 800: '#1f1f2e', 850: '#1a1a2e', 900: '#11111b', 950: '#0f0f1a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4a4a6a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6a6a8a; }
+        
+
+        .prose {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word; 
+            max-width: 100%;
+        }
+
+        .prose p { margin-bottom: 0.5rem; }
+        .prose pre { background-color: #0f0f1a; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+        .prose code { color: #e2e8f0; background-color: #2d2d3f; padding: 0.2rem 0.4rem; border-radius: 0.25rem; }
+        
+
+        .prose img { 
+            border-radius: 0.5rem; 
+            margin-top: 10px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5); 
+            max-width: 100% !important; 
+            height: auto !important; 
+            cursor: zoom-in;
+            display: block; 
+        }
+
+
+        .prose div, .prose span, .prose small {
+            max-width: 100%;
+            white-space: pre-wrap; 
+        }
+
+        .sidebar-hidden * { opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 h-screen font-sans overflow-hidden" @click="closeMenu">
+
+    <div id="app" class="flex h-full w-full">
+        
+        <aside class="bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300 ease-in-out z-40"
+               :class="[
+                   'fixed inset-y-0 left-0 h-full w-64 transform',
+                   isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full',
+                   'md:relative md:translate-x-0',
+                   isDesktopSidebarOpen ? 'md:w-64' : 'md:w-0 md:border-r-0 md:overflow-hidden sidebar-hidden'
+               ]">
+            
+            <div class="flex flex-col h-full min-w-[16rem]">
+                <div class="p-4 border-b border-gray-800">
+                    <button @click="createNewSession" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg transition shadow-lg shadow-blue-900/20 whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                        <span>{{ t('newChat') }}</span>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                    <div v-if="sessions.length === 0" class="text-center text-gray-600 text-sm mt-4 whitespace-nowrap">
+                        {{ t('noHistory') }}
+                    </div>
+                    
+                    <div v-for="sess in sessions" :key="sess.sessionId" 
+                        class="group relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition"
+                        :class="sess.sessionId === sessionId ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'"
+                        @click="switchSession(sess.sessionId)">
+                        
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <span class="text-lg flex-shrink-0">{{ sess.sessionId === sessionId ? '💬' : '💭' }}</span>
+                            <span class="truncate text-sm opacity-90">{{ sess.title }}</span>
+                        </div>
+
+                        <div class="relative flex-shrink-0" @click.stop>
+                            <button @click="toggleMenu(sess.sessionId)" 
+                                    class="p-1 rounded hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    :class="activeMenuId === sess.sessionId ? 'opacity-100 bg-gray-700' : ''">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                </svg>
+                            </button>
+
+                            <div v-if="activeMenuId === sess.sessionId" 
+                                class="absolute right-0 top-8 w-32 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+                                <button @click="renameSession(sess)" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-blue-600 hover:text-white flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                    {{ t('rename') }}
+                                </button>
+                                <button @click="deleteSession(sess.sessionId)" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-600 hover:text-white flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    {{ t('delete') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 border-t border-gray-800 text-xs text-gray-600 flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <span>Local chat v1.4</span>
+                        <span>{{ sessions.length }} {{ t('chatsCount') }}</span>
+                    </div>
+                    <div class="flex gap-2 justify-center bg-gray-800/50 p-1 rounded-lg">
+                        <button @click="setLang('zh-TW')" :class="currentLang === 'zh-TW' ? 'text-white bg-gray-700' : 'text-gray-500 hover:text-gray-300'" class="flex-1 py-1 rounded transition text-xs">繁中</button>
+                        <button @click="setLang('en')" :class="currentLang === 'en' ? 'text-white bg-gray-700' : 'text-gray-500 hover:text-gray-300'" class="flex-1 py-1 rounded transition text-xs">EN</button>
+                        <button @click="setLang('ja')" :class="currentLang === 'ja' ? 'text-white bg-gray-700' : 'text-gray-500 hover:text-gray-300'" class="flex-1 py-1 rounded transition text-xs">JP</button>
+                    </div>
+                </div>
+            </aside>
+            
+            <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+                <div v-if="previewImage" @click="previewImage = null" class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm cursor-zoom-out">
+                    <img :src="previewImage" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl">
+                    <button class="absolute top-4 right-4 text-white hover:text-gray-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </transition>
+
+        <div v-if="isMobileMenuOpen" @click="isMobileMenuOpen = false" class="fixed inset-0 bg-black/50 z-30 md:hidden glass-effect"></div>
+
+        <div class="flex-1 flex flex-col h-full bg-gray-850 relative transition-all duration-300">
+            
+            <header class="h-14 border-b border-gray-800 flex items-center px-4 justify-between bg-gray-850/90 backdrop-blur z-10">
+                <div class="flex items-center gap-3">
+                    <button @click="toggleSidebar" class="p-2 rounded-full text-gray-400 hover:bg-gray-800 hover:text-white transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    
+                    <h1 class="font-bold text-lg bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent truncate max-w-[200px] md:max-w-md">
+                        {{ currentSessionTitle }}
+                    </h1>
+                </div>
+                <div class="hidden md:flex items-center gap-2 text-xs font-mono text-gray-500 bg-gray-800 px-2 py-1 rounded">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span> Online
+                </div>
+            </header>
+
+            <main class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth" id="chat-container">
+                <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
+                    <div class="text-6xl opacity-20">💬</div>
+                    <p>{{ t('welcomeMessage') }}</p>
+                    <div class="flex gap-2 text-sm flex-wrap justify-center">
+                        <button @click="setInput(t('prompt1_value'))" class="px-3 py-1 border border-gray-700 rounded-full hover:bg-gray-700 transition">{{ t('prompt1_label') }}</button>
+                        <button @click="setInput(t('prompt2_value'))" class="px-3 py-1 border border-gray-700 rounded-full hover:bg-gray-700 transition">{{ t('prompt2_label') }}</button>
+                    </div>
+                </div>
+
+                <div v-for="(msg, index) in messages" :key="index" class="flex gap-4" :class="msg.role === 'user' ? 'flex-row-reverse' : ''">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs shadow-lg"
+                         :class="msg.role === 'user' ? 'bg-blue-600' : 'bg-purple-600'">
+                        {{ msg.role === 'user' ? 'U' : 'AI' }}
+                    </div>
+                    
+                    <div class="max-w-[85%] md:max-w-[75%] rounded-2xl p-4 shadow-lg text-sm leading-relaxed overflow-hidden"
+                         :class="msg.role === 'user' ? 'bg-blue-600/20 text-blue-100 rounded-tr-none' : 'bg-gray-750 text-gray-100 rounded-tl-none'">
+                        
+                        <div class="prose prose-invert max-w-none" 
+                             v-html="renderMessage(msg.content)"
+                             @click="handleImageClick">
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="isLoading" class="flex gap-4">
+                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center animate-pulse text-xs">AI</div>
+                    <div class="bg-gray-750 rounded-2xl rounded-tl-none p-4 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
+                        <span class="text-xs text-gray-400 ml-2">{{ loadingText }}</span>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="p-4 bg-gray-900 border-t border-gray-800">
+                <div class="max-w-4xl mx-auto relative">
+                    <textarea 
+                        v-model="inputMsg" 
+                        @keydown.enter.exact.prevent="sendMessage"
+                        :placeholder="t('inputPlaceholder')" 
+                        class="w-full bg-gray-800 text-white rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none h-14 scrollbar-hide shadow-inner"
+                        :disabled="isLoading"
+                    ></textarea>
+                    <button 
+                        @click="sendMessage" 
+                        :disabled="isLoading || !inputMsg.trim()"
+                        class="absolute right-2 top-2 p-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg transition text-white shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, nextTick, onMounted, computed } = Vue;
+
+        createApp({
+            setup() {
+                const messages = ref([]);
+                const sessions = ref([]);
+                const inputMsg = ref("");
+                const isLoading = ref(false);
+                const loadingText = ref(""); 
+                const sessionId = ref("");
+                const isMobileMenuOpen = ref(false);
+                const isDesktopSidebarOpen = ref(true);
+                const activeMenuId = ref(null);
+                const currentLang = ref(localStorage.getItem('app_lang') || 'en');
+                const previewImage = ref(null);
+
+                const translations = {
+                    'zh-TW': {
+                        newChat: '新對話',
+                        noHistory: '暫無歷史紀錄',
+                        rename: '重新命名',
+                        delete: '刪除',
+                        confirmDelete: '確定要永久刪除此對話嗎？',
+                        enterNewName: '請輸入新的標題:',
+                        welcomeMessage: '選擇一個對話或開始新的旅程',
+                        prompt1_label: '🎨 畫個賽博龐克城市',
+                        prompt1_value: 'Draw a cyberpunk city',
+                        prompt2_label: '📚 解釋量子力學',
+                        prompt2_value: '解釋量子力學',
+                        inputPlaceholder: '輸入訊息... (Enter 發送)',
+                        loadingDraw: '召喚顯卡畫圖中...',
+                        loadingThink: 'Ollama 思考中...',
+                        defaultTitle: 'New Chat',
+                        chatsCount: 'chats'
+                    },
+                    'en': {
+                        newChat: 'New Chat',
+                        noHistory: 'No history',
+                        rename: 'Rename',
+                        delete: 'Delete',
+                        confirmDelete: 'Are you sure you want to delete this chat?',
+                        enterNewName: 'Enter new title:',
+                        welcomeMessage: 'Start a new journey or select a chat',
+                        prompt1_label: '🎨 Draw Cyberpunk City',
+                        prompt1_value: 'Draw a cyberpunk city',
+                        prompt2_label: '📚 Explain Quantum Physics',
+                        prompt2_value: 'Explain quantum physics',
+                        inputPlaceholder: 'Type a message... (Enter to send)',
+                        loadingDraw: 'Generating image...',
+                        loadingThink: 'AI is thinking...',
+                        defaultTitle: 'New Chat',
+                        chatsCount: 'chats'
+                    },
+                    'ja': {
+                        newChat: '新規チャット',
+                        noHistory: '履歴なし',
+                        rename: '名前を変更',
+                        delete: '削除',
+                        confirmDelete: 'このチャットを完全に削除してもよろしいですか？',
+                        enterNewName: '新しいタイトルを入力してください:',
+                        welcomeMessage: 'チャットを選択するか、新しい旅を始めましょう',
+                        prompt1_label: '🎨 サイバーパンクな街を描く',
+                        prompt1_value: 'Draw a cyberpunk city',
+                        prompt2_label: '📚 量子力学を解説',
+                        prompt2_value: '量子力学について解説して',
+                        inputPlaceholder: 'メッセージを入力... (Enterで送信)',
+                        loadingDraw: '画像生成中...',
+                        loadingThink: '思考中...',
+                        defaultTitle: '新規チャット',
+                        chatsCount: 'チャット'
+                    }
+                };
+                
+                const handleImageClick = (e) => {
+                    if (e.target.tagName === 'IMG') {
+                        previewImage.value = e.target.src;
+                    }
+                };
+
+                const t = (key) => {
+                    return translations[currentLang.value][key] || key;
+                };
+
+                const setLang = (lang) => {
+                    currentLang.value = lang;
+                    localStorage.setItem('app_lang', lang);
+                };
+
+                const currentSessionTitle = computed(() => {
+                    const sess = sessions.value.find(s => s.sessionId === sessionId.value);
+                    return sess ? sess.title : t('defaultTitle'); 
+                });
+
+                onMounted(async () => {
+                    const savedSidebarState = localStorage.getItem('desktop_sidebar_open');
+                    if (savedSidebarState !== null) {
+                        isDesktopSidebarOpen.value = savedSidebarState === 'true';
+                    }
+
+                    await fetchSessions();
+                    let stored = localStorage.getItem('chat_session_id');
+                    const exists = sessions.value.find(s => s.sessionId === stored);
+                    if (stored && exists) {
+                        switchSession(stored);
+                    } else {
+                        createNewSession();
+                    }
+                });
+
+                const toggleSidebar = () => {
+                    if (window.innerWidth < 768) {
+                        isMobileMenuOpen.value = !isMobileMenuOpen.value;
+                    } else {
+                        isDesktopSidebarOpen.value = !isDesktopSidebarOpen.value;
+                        localStorage.setItem('desktop_sidebar_open', isDesktopSidebarOpen.value);
+                    }
+                };
+
+                const fetchSessions = async () => {
+                    try {
+                        const res = await fetch('/api/sessions');
+                        if(res.ok) {
+                            sessions.value = await res.json();
+                        }
+                    } catch(e) { console.error(e); }
+                };
+
+                const switchSession = async (id) => {
+                    sessionId.value = id;
+                    localStorage.setItem('chat_session_id', id);
+                    messages.value = [];
+                    if (window.innerWidth < 768) {
+                        isMobileMenuOpen.value = false;
+                    }
+                    try {
+                        const res = await fetch(`/api/history?sessionId=${id}`);
+                        if(res.ok) messages.value = await res.json();
+                    } catch(e) { console.error(e); }
+                    scrollToBottom();
+                };
+
+                const createNewSession = () => {
+                    const newId = crypto.randomUUID();
+                    sessionId.value = newId;
+                    localStorage.setItem('chat_session_id', newId);
+                    messages.value = [];
+                    if (window.innerWidth < 768) {
+                        isMobileMenuOpen.value = false;
+                    }
+                };
+
+                const toggleMenu = (id) => {
+                    activeMenuId.value = activeMenuId.value === id ? null : id;
+                };
+
+                const closeMenu = () => { activeMenuId.value = null; };
+
+                const renameSession = async (sess) => {
+                    activeMenuId.value = null;
+                    const newName = prompt(t('enterNewName'), sess.title);
+                    if (newName && newName.trim() !== "") {
+                        await fetch(`/api/sessions/rename?sessionId=${sess.sessionId}&newTitle=${encodeURIComponent(newName)}`, { method: 'POST' });
+                        await fetchSessions();
+                    }
+                };
+
+                const deleteSession = async (id) => {
+                    activeMenuId.value = null;
+                    if (confirm(t('confirmDelete'))) {
+                        await fetch(`/api/sessions/delete?sessionId=${id}`, { method: 'DELETE' });
+                        await fetchSessions();
+                        if (sessionId.value === id) createNewSession();
+                    }
+                };
+
+                const setInput = (text) => { inputMsg.value = text; };
+
+                const scrollToBottom = async () => {
+                    await nextTick();
+                    const container = document.getElementById('chat-container');
+                    if(container) container.scrollTop = container.scrollHeight;
+                };
+
+                const renderMessage = (content) => {
+                    if (content.includes("<div style='text-align:center;'>") || content.includes("<img src='/images/")) {
+                        return content;
+                    }
+                    return marked.parse(content);
+                };
+
+                const sendMessage = async () => {
+                    const text = inputMsg.value.trim();
+                    if (!text) return;
+                    const currentId = sessionId.value;
+                    messages.value.push({ role: 'user', content: text });
+                    inputMsg.value = "";
+                    isLoading.value = true;
+                    
+                    if (text.toLowerCase().includes("draw") || text.includes("畫")) {
+                        loadingText.value = t('loadingDraw');
+                    } else {
+                        loadingText.value = t('loadingThink');
+                    }
+                    
+                    scrollToBottom();
+                    try {
+                        const url = `/api/chat?msg=${encodeURIComponent(text)}&sessionId=${currentId}`;
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error("API Error");
+                        const data = await response.text(); 
+                        messages.value.push({ role: 'assistant', content: data });
+                        await fetchSessions();
+                    } catch (error) {
+                        messages.value.push({ role: 'assistant', content: "❌ Error: " + error.message });
+                    } finally {
+                        isLoading.value = false;
+                        scrollToBottom();
+                    }
+                };
+
+                return {
+                    messages, sessions, inputMsg, isLoading, loadingText, sessionId, 
+                    isMobileMenuOpen, isDesktopSidebarOpen, activeMenuId, currentLang,
+                    toggleSidebar, sendMessage, setInput, renderMessage, createNewSession, switchSession, currentSessionTitle,
+                    toggleMenu, closeMenu, renameSession, deleteSession,
+                    t, setLang, previewImage, handleImageClick
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
