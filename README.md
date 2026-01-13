@@ -120,3 +120,6 @@ ComfyUI-GGUF 節點顯示紅色
 ollama：11434
 ComfyUI：8188
 Backend：8080
+
+啟動Zimage cmd：.\python_embeded\python.exe -s ComfyUI\main.py --windows-standalone-build --listen --enable-cors-header --preview-method none --lowvram --fp32-vae --force-fp32
+路徑 D:\ComfyUI_windows_portable_nvidia_cu121_or_cpu\ComfyUI_windows_portable
